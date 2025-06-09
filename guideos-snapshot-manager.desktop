@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=GuideOS Snapshot-Manager
+Comment=Einfaches GUI-Tool zur Verwaltung von Btrfs-Snapshots
+Exec=sudo /bin/guideos-snapshot-manager.sh
+Icon=/usr/share/pixmaps/guideos-snapshot-manager.png
+Terminal=false
+Type=Application
+Categories=GuideOS;
+StartupNotify=true
+Name[de_DE]=Guideos-Snapshot-Manager
