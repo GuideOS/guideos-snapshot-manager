@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+
+PACKAGE := guideos-snapshot-manager
+
+%:
+	dh $@
+
+override_dh_install:
+	# Erstellen der notwendigen Verzeichnisse und Kopieren der Dateien
+	install -d debian/$(PACKAGE)/usr/bin/
+	install -d debian/$(PACKAGE)/usr/share/icons/hicolor/256x256
+	install -d debian/$(PACKAGE)/usr/share/icons/hicolor/scalable/apps
+	install -d debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)
+	install -m 644 LICENSE debian/$(PACKAGE)/usr/share/doc/$(PACKAGE)/LICENSE
+	install -m 755 guideos-snapshot-manager debian/$(PACKAGE)/usr/bin/
+	install -m 644 icons/guideos-snapshot-manager.png debian/$(PACKAGE)/usr/share/icons/hicolor/256x256/guideos-snapshot-manager.png
+	install -m 644 icons/guideos-snapshot-manager.svg debian/$(PACKAGE)/usr/share/icons/hicolor/scalable/apps/guideos-snapshot-manager.svg
+
+
+	dh_install

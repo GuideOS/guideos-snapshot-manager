@@ -1,0 +1,15 @@
+Source: guideos-snapshot-manager
+Section: misc
+Priority: optional
+Maintainer: Actionschnitzel <actionschnitzel@guideos.de>
+Build-Depends: debhelper (>= 9),bash
+Standards-Version: 25.4.1
+Homepage: https://guideos.de/
+
+Package: guideos-snapshot-manager
+Architecture: all
+Depends: ${misc:Depends}, bash, zenity
+Description: GUI for managing snapshots in GuideOS
+ This package provides a graphical user interface for managing snapshots
+ in GuideOS. It allows users to create, delete, and restore snapshots easily
+ without needing to use the command line.
