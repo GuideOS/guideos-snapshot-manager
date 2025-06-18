@@ -1,3 +1,9 @@
+guideos-snapshot-manager (1.1) unstable; urgency=medium
+
+  * Fixed: Creat Desktop File
+
+ -- Actionschnitzel <actionschnitzel@guideos.de>  Wed, 18 Jun 2025 21:13:35 +0200
+
 guideos-snapshot-manager (1.0) unstable; urgency=medium
 
   * Initial release.

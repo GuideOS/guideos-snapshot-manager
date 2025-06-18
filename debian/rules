@@ -16,5 +16,6 @@ override_dh_install:
 	install -m 644 guideos-snapshot-manager.png debian/$(PACKAGE)/usr/share/icons/hicolor/256x256/guideos-snapshot-manager.png
 	install -m 644 guideos-snapshot-manager.svg debian/$(PACKAGE)/usr/share/icons/hicolor/scalable/apps/guideos-snapshot-manager.svg
 
+	./create_desktop_files.sh
 
 	dh_install
