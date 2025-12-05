@@ -1,3 +1,9 @@
+guideos-snapshot-manager (1.2.1) unstable; urgency=medium
+
+  * Fixed: Removed duplicate code from main script
+
+ -- Actionschnitzel <actionschnitzel@guideos.de>  Thu, 05 Dec 2025 19:25:00 +0100
+
 guideos-snapshot-manager (1.2) unstable; urgency=medium
 
   * Migrated from Snapper to Timeshift backend
