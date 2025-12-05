@@ -1,213 +1,314 @@
 #!/bin/bash
+# -----------------------------------------------------------------------------
+# GuideOS Snapshot-Manager
+# -----------------------------------------------------------------------------
+# GUI-Frontend für Timeshift
+# - Snapshots erstellen
+# - Snapshots löschen
+# - Anzeige von Snapshots mit Datum und Kommentar
+# - Einfache Bedienung über Zenity
+# -----------------------------------------------------------------------------
+# Hinweis:
+# Vor der Nutzung Timeshift einmalig einrichten:
+# 1. Alle Snapshot-Intervalle anhaken
+# 2. Home-Verzeichnis NICHT sichern (vermeidet große Snapshots)
+# -----------------------------------------------------------------------------
+# Autor: evilware666
+# Lizenz: MIT
+# -----------------------------------------------------------------------------
+# Version: 1.1
+# Letzte Änderung: 2025-10-26
+# -----------------------------------------------------------------------------
 
-# =============================================================================================================
-# Titel       : GuideOS Snapshot-Manager
-# Autor       : evilware666
-# Datum       : 2025-06-11
-# Beschreibung: Der GuideOS Snapshot-Manager erstellt und verwaltet Snapshots deines Systems.
-# Sprache     : Bash
-# =============================================================================================================
-
-# =============================================================================================================
-# Verhindert, dass das Programm doppelt ausgeführt wird und gibt einen Hinweis aus.
-# =============================================================================================================
-LOCKFILE="/tmp/guideos_snapshot_manager.lock"
-if [ -e "$LOCKFILE" ]; then
-  zenity --error --title="Schon gestartet" --text="Der GuideOS Snapshot-Manager wird bereits ausgeführt."
-  exit 1
-else
-  touch "$LOCKFILE"
-  trap "rm -f $LOCKFILE" EXIT
+# ========================= Systemprüfung =========================
+ROOT_FS=$(findmnt -n -o FSTYPE /)
+if [ "$ROOT_FS" != "btrfs" ]; then
+    zenity --error --title="Fehler: Nicht-Btrfs-System" \
+        --text="Dieses Tool kann nur auf Systemen mit Btrfs-Dateisystem ausgeführt werden.\nDein System verwendet: $ROOT_FS"
+    exit 1
 fi
 
-# =============================================================================================================
-# Live-System-Erkennung
-# =============================================================================================================
-if grep -E ' / (overlay|squashfs|aufs|tmpfs)' /proc/mounts &>/dev/null; then
-  zenity --error --title="Live-System erkannt" \
-    --text="Der GuideOS Snapshot-Manager wurde in einer Live-Umgebung gestartet.\n
-                 Bitte starte das Programm auf einem fest installierten System!"
-  exit 1
+if [ -d "/cdrom" ] || grep -q "boot=live" /proc/cmdline; then
+    zenity --error --title="Fehler: Live-System" \
+        --text="Dieses Tool sollte nicht im Live-System ausgeführt werden."
+    exit 1
 fi
+# =================================================================
 
-# =============================================================================================================
-# Btrfs-Dateisystem-Erkennung
-# =============================================================================================================
-if ! findmnt -n -T / | grep -q btrfs; then
-  zenity --error --title="Nicht unterstütztes Dateisystem" \
-    --text="Der GuideOS Snapshot-Manager funktioniert nur auf einem Btrfs-Dateisystem.\n
-                 Bitte verwende ein System mit Btrfs-Dateisystem."
-  exit 1
-fi
+zenity --question --title="GuideOS Snapshot-Manager - Einrichtungshinweis" \
+--text="Bitte starte zunächst Timeshift und folge den Anweisungen.\n\n\
+- Btrfs aktivieren\n- Alle Snapshot-Intervalle anhaken\n- Home-Verzeichnis NICHT sichern\n\n\
+Danach ist der GuideOS Snapshot-Manager einsatzbereit." \
+--ok-label="Ja, ich habe Timeshift eingerichtet" \
+--cancel-label="Abbrechen" --width=700 --height=400
 
-# =============================================================================================================
-# Überprüft, ob alle Programme zur Ausführung vom GuideOS Snapshot-Manager vorhanden sind.
-# =============================================================================================================
-fehlende_tools=""
-for tool in snapper zenity notify-send paplay; do
-  if ! command -v "$tool" &>/dev/null; then
-    fehlende_tools+="$tool\n"
-  fi
-done
-
-if [ -n "$fehlende_tools" ]; then
-  zenity --error --title="Fehlende Programme" --text="Folgende Programme fehlen:\n$fehlende_tools\nBitte installiere sie und starte das Tool erneut."
+if [ $? -ne 0 ]; then
+  zenity --info --title="Abgebrochen" --text="Bitte Timeshift zuerst einrichten."
   exit 1
 fi
 
-# =============================================================================================================
-# Benutzerhilfe anzeigen
-# =============================================================================================================
-zenity --question --title="Benutzerhilfe anzeigen?" --text="Möchtest du eine kurze Einführung in den Snapshot-Manager erhalten?"
-if [ $? -eq 0 ]; then
-  zenity --info --title="Benutzerhilfe – GuideOS Snapshot-Manager" \
-    --text="\n\n🔄 GuideOS Snapshot-Manager – Dein System sicher im Griff
+export G_MESSAGES_DEBUG=none
+TITLE="GuideOS Snapshot-Manager"
 
-Der GuideOS Snapshot-Manager hilft dir dabei, dein System zu sichern und bei Bedarf wiederherzustellen.
-Ein Snapshot ist wie ein Sicherungspunkt deines gesamten Systems – ähnlich wie ein Systemwiederherstellungspunkt in Windows oder ein Time Machine-Backup auf dem Mac. Wenn später etwas schiefgeht (z. B. durch ein fehlerhaftes Update oder eine falsche Einstellung), kannst du den Zustand deines Systems einfach wieder auf einen früheren Zeitpunkt zurücksetzen.
+PLAY_SOUND() {
+  if command -v paplay >/dev/null 2>&1 && [ -f "/usr/share/cinnamon/sounds/bell.ogg" ]; then
+    paplay "/usr/share/cinnamon/sounds/bell.ogg" 2>/dev/null &
+  fi
+}
 
-🛠️ Was du im Hauptmenü machen kannst:
 
-Snapshot erstellen
-Du legst einen neuen Sicherungspunkt an. So merkt sich das System seinen aktuellen Zustand.
-
-Snapshot löschen
-Alte oder nicht mehr benötigte Sicherungspunkte kannst du hier entfernen, um Speicherplatz zu sparen.
-
-Snapshot-Übersicht anzeigen
-Zeigt dir eine Liste aller vorhandenen Snapshots an – inklusive Datum und Namen. So behältst du den Überblick.
-
-💡 Tipp:
-Erstelle vor jeder größeren Änderung (z. B. Systemaktualisierung, Software-Installation oder Konfigurationsänderung) einen Snapshot. So kannst du dein System jederzeit in einen funktionierenden Zustand zurückversetzen – ganz ohne Datenverlust."
+PASSWORT=$(zenity --password --title="Authentifizierung erforderlich" --text="Bitte das Passwort des aktuellen Benutzers eingeben:")
+if [ -z "$PASSWORT" ]; then
+  zenity --error --title="Abgebrochen" --text="Kein Passwort eingegeben."
+  exit 1
 fi
 
-# =============================================================================================================
-# GUI-Passwortabfrage mit Zenity
-# =============================================================================================================
-PASSWORT=$(zenity --password --title="Authentifizierung erforderlich")
-if ! echo "$PASSWORT" | sudo -S -v &>/dev/null; then
-  zenity --error --title="Authentifizierung fehlgeschlagen" --text="Falsches Passwort oder keine Berechtigung.\nDas Tool wird beendet."
-  exit 
-fi
-
-# =============================================================================================================
-# Wichtiger Hinweis
-# =============================================================================================================
-zenity --warning --title="Wichtiger Hinweis" --text="Lösche regelmäßig alte Snapshots, damit deine Festplatte nicht zu voll wird. 
-
-                ⚠️Es werden MAXIMAL 50 SNAPSHOTS empfohlen.⚠️"
-
-# =============================================================================================================
-# Warnung bei zu vielen Snapshots
-# =============================================================================================================
-function pruefe_snapshot_anzahl() {
-  SNAPSHOT_COUNT=$(snapper -c "$SNAPPER_CONFIG" list | tail -n +3 | wc -l)
-  if [ "$SNAPSHOT_COUNT" -ge 50 ]; then
-    zenity --warning --title="Zu viele Snapshots!" \
-      --text="              Es wurden $SNAPSHOT_COUNT Snapshots erstellt!\n\n
- Die empfohlene Höchstzahl von 50 Snapshots ist somit erreicht.\n
- Bitte lösche alte Snapshots, um Speicherplatz freizugeben.\n
-⚠️Ein volles Laufwerk kann zu Instabilität und Datenverlust führen⚠️"
-  fi
+run_sudo_bash() {
+  echo "$PASSWORT" | sudo -S -p '' bash -c "$1"
 }
 
-# =============================================================================================================
-# 🛠️  GuideOS Snapshot-Manager
-# =============================================================================================================
-
-SNAPPER_CONFIG="root"
-
-function sende_benachrichtigung() {
-  TITLE="$1"
-  TEXT="$2"
-  notify-send "$TITLE" "$TEXT"
-}
-
-function spiele_benachrichtigungston() {
-  paplay /usr/share/sounds/freedesktop/stereo/complete.oga &
-}
-
-function grub_aktualisieren() {
-  if [ -x /usr/sbin/update-grub ]; then
-    echo "$PASSWORT" | sudo -S /usr/sbin/update-grub
-  fi
-}
-
-function snapshot_erstellen() {
-  NAME_EINGABE=$(zenity --entry --title="Snapshot erstellen" --text="Name des Snapshots:")
-  [ -z "$NAME_EINGABE" ] && return
-
-  NAME="${NAME_EINGABE// /_}"
-
-  echo "$PASSWORT" | sudo -S snapper -c "$SNAPPER_CONFIG" create --description "$NAME"
-  sende_benachrichtigung "Snapshot erstellt" "Snapshot \"$NAME\" wurde erstellt."
-  spiele_benachrichtigungston
-  grub_aktualisieren
-  pruefe_snapshot_anzahl
-}
-
-function snapshot_loeschen() {
-  SNAP_LIST=$(snapper -c "$SNAPPER_CONFIG" list | tail -n +3)
-
-  if [ -z "$SNAP_LIST" ]; then
-    zenity --info --text="Keine Snapshots zum Löschen vorhanden."
-    return
-  fi
-
-  OPTIONS=()
+get_snapshots() {
+  OUT=$(echo "$PASSWORT" | sudo -S -p '' timeshift --list 2>/dev/null || true)
+  result=""
   while IFS= read -r line; do
-    ID=$(echo "$line" | awk '{print $1}')
-    DESC=$(echo "$line" | cut -d'|' -f3- | sed 's/^ *//;s/ *$//')
-    [ -z "$DESC" ] && DESC="(keine Beschreibung)"
-    OPTIONS+=("FALSE" "$ID" "$DESC")
-  done <<< "$SNAP_LIST"
-
-  SNAP_IDS=$(zenity --list --checklist --multiple --title="GuideOS Snapshot-Manager – Snapshots löschen" \
-    --text="Wähle Snapshots zum Löschen aus:" \
-    --width=800 --height=400 \
-    --column="Markieren" --column="ID" --column="Beschreibung" \
-    "${OPTIONS[@]}" --separator=" ")
-
-  if [ -z "$SNAP_IDS" ]; then
-    zenity --info --text="Keine Snapshots ausgewählt."
-    return
-  fi
-
-  for id in $SNAP_IDS; do
-    echo "$PASSWORT" | sudo -S snapper -c "$SNAPPER_CONFIG" delete "$id"
-  done
-
-  sende_benachrichtigung "Snapshot gelöscht" "Die ausgewählten Snapshots wurden gelöscht."
-  spiele_benachrichtigungston
-  grub_aktualisieren
+    id=$(printf "%s" "$line" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}[_-][0-9]{2}-[0-9]{2}-[0-9]{2}' || true)
+    if [ -n "$id" ]; then
+      comment=$(printf "%s" "$line" | sed "s/.*$id[[:space:]]*//" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      [ -z "$comment" ] && comment="(kein Kommentar)"
+      display=$(printf "%s" "$id" | sed -E 's/_/ /; s/([0-9]{2})-([0-9]{2})-([0-9]{2})$/\1:\2:\3/')
+      result+="$id|$display|$comment"$'\n'
+    fi
+  done <<< "$OUT"
+  printf "%s" "$result"
 }
 
-function snapshot_uebersicht() {
-  SNAPSHOTS=$(snapper -c "$SNAPPER_CONFIG" list | tail -n +3)
-  if [ -z "$SNAPSHOTS" ]; then
-    zenity --info --text="Keine Snapshots vorhanden."
+create_snapshot() {
+  SNAP_NAME=$(zenity --entry --title="Snapshot-Name" --text="Gib einen Namen für den Snapshot ein (optional):")
+  [ $? -ne 0 ] && return
+  [ -z "$SNAP_NAME" ] && SNAP_NAME="Manueller Snapshot"
+
+  zenity --info --title="Snapshot" --text="Snapshot wird erstellt — bitte warten..."
+  run_sudo_bash "timeshift --create --comments \"${SNAP_NAME}\" --yes" > /tmp/timeshift_create.log 2>&1
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    zenity --info --title="Fertig" --text="Snapshot '$SNAP_NAME' erfolgreich erstellt."
+    PLAY_SOUND complete
+    run_sudo_bash "update-grub" > /tmp/update_grub_create.log 2>&1
+    zenity --info --title="GRUB aktualisiert" --text="GRUB-Konfiguration wurde nach dem Snapshot aktualisiert."
   else
-    zenity --text-info --title="Snapshot-Übersicht" --width=700 --height=400 --filename=<(echo "$SNAPSHOTS")
+    zenity --text-info --title="Fehler bei Erstellung" --filename=/tmp/timeshift_create.log --width=800 --height=400
+    PLAY_SOUND dialog-error
   fi
 }
 
-function hauptmenue() {
-  pruefe_snapshot_anzahl
-  while true; do
-    AUSWAHL=$(zenity --list --title="GuideOS Snapshot-Manager" \
-      --column="Aktion" --width=400 --height=300 \
-      "Snapshot erstellen" "Snapshot löschen" "Snapshot-Übersicht anzeigen" "Beenden")
+delete_snapshot() {
+  entries=$(get_snapshots)
+  [ -z "$entries" ] && zenity --info --title="Löschen" --text="Keine Snapshots vorhanden." && return
 
-    case "$AUSWAHL" in
-      "Snapshot erstellen") snapshot_erstellen ;;
-      "Snapshot löschen") snapshot_loeschen ;;
-      "Snapshot-Übersicht anzeigen") snapshot_uebersicht ;;
-      "Beenden"|"") 
-        sudo -k   # Sudo-Credentials entwerten
-        exit 0
-        ;;
+  sorted_entries=$(printf "%s" "$entries" | sort -r)
+  counter=1
+  args=()
+  declare -A id_map
+
+  while IFS='|' read -r id display comment; do
+    display_id="GuideOS-Snapshot $counter"
+    args+=("$display_id" "$display${comment:+ — $comment}")
+    id_map["$display_id"]="$id"
+    ((counter++))
+  done <<< "$sorted_entries"
+
+  selected=$(zenity --list --title="Snapshot löschen" --text="Wähle Snapshot zum Löschen:" \
+            --column="Snapshot-ID" --column="Snapshots (Datum & Name)" \
+            "${args[@]}" --height=450 --width=800)
+  [ -z "$selected" ] && return
+
+  selected_id="${id_map[$selected]}"
+  zenity --question --title="Bestätigung" --text="Snapshot\n${selected}\nwirklich löschen?" --ok-label="Ja" --cancel-label="Nein"
+  [ $? -ne 0 ] && return
+
+  run_sudo_bash "timeshift --delete --snapshot \"$selected_id\" --yes" > /tmp/timeshift_delete.log 2>&1
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    zenity --info --title="Gelöscht" --text="Snapshot '${selected}' wurde gelöscht."
+    PLAY_SOUND complete
+    run_sudo_bash "update-grub" > /tmp/update_grub_delete.log 2>&1
+    zenity --info --title="GRUB aktualisiert" --text="GRUB-Konfiguration wurde nach dem Löschen aktualisiert."
+  else
+    zenity --text-info --title="Fehler beim Löschen" --filename=/tmp/timeshift_delete.log --width=800 --height=400
+    PLAY_SOUND dialog-error
+  fi
+}
+
+main_menu() {
+  while true; do
+    choice=$(zenity --list --title="$TITLE" --text="Was möchtest du tun?" \
+      --column="Aktion" --height=300 --width=500 \
+      "Snapshot erstellen" "Snapshot löschen" "Beenden")
+
+    case "$choice" in
+      "Snapshot erstellen") create_snapshot ;;
+      "Snapshot löschen") delete_snapshot ;;
+      "Beenden") exit 0 ;;
+      *) break ;;
     esac
   done
 }
 
-hauptmenue
+main_menu
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# GuideOS Snapshot-Manager
+# -----------------------------------------------------------------------------
+# GUI-Frontend für Timeshift
+# - Snapshots erstellen
+# - Snapshots löschen
+# - Anzeige von Snapshots mit Datum und Kommentar
+# - Einfache Bedienung über Zenity
+# -----------------------------------------------------------------------------
+# Hinweis:
+# Vor der Nutzung Timeshift einmalig einrichten:
+# 1. Alle Snapshot-Intervalle anhaken
+# 2. Home-Verzeichnis NICHT sichern (vermeidet große Snapshots)
+# -----------------------------------------------------------------------------
+# Autor: GuideOS-Team
+# Lizenz: CC0-1.0 / Public Domain
+# -----------------------------------------------------------------------------
+# Version: 1.1
+# Letzte Änderung: 2025-10-26
+# -----------------------------------------------------------------------------
+
+# ========================= Systemprüfung =========================
+ROOT_FS=$(findmnt -n -o FSTYPE /)
+if [ "$ROOT_FS" != "btrfs" ]; then
+    zenity --error --title="Fehler: Nicht-Btrfs-System" \
+        --text="Dieses Tool kann nur auf Systemen mit Btrfs-Dateisystem ausgeführt werden.\nDein System verwendet: $ROOT_FS"
+    exit 1
+fi
+
+if [ -d "/cdrom" ] || grep -q "boot=live" /proc/cmdline; then
+    zenity --error --title="Fehler: Live-System" \
+        --text="Dieses Tool sollte nicht im Live-System ausgeführt werden."
+    exit 1
+fi
+# =================================================================
+
+zenity --question --title="GuideOS Snapshot-Manager - Einrichtungshinweis" \
+--text="Bitte starte zunächst Timeshift und folge den Anweisungen.\n\n\
+- Btrfs aktivieren\n- Alle Snapshot-Intervalle anhaken\n- Home-Verzeichnis NICHT sichern\n\n\
+Danach ist der GuideOS Snapshot-Manager einsatzbereit." \
+--ok-label="Ja, ich habe Timeshift eingerichtet" \
+--cancel-label="Abbrechen" --width=700 --height=400
+
+if [ $? -ne 0 ]; then
+  zenity --info --title="Abgebrochen" --text="Bitte Timeshift zuerst einrichten."
+  exit 1
+fi
+
+export G_MESSAGES_DEBUG=none
+TITLE="GuideOS Snapshot-Manager"
+
+PLAY_SOUND() {
+  if command -v paplay >/dev/null 2>&1 && [ -f "/usr/share/cinnamon/sounds/bell.ogg" ]; then
+    paplay "/usr/share/cinnamon/sounds/bell.ogg" 2>/dev/null &
+  fi
+}
+
+
+PASSWORT=$(zenity --password --title="Authentifizierung erforderlich" --text="Bitte das Passwort des aktuellen Benutzers eingeben:")
+if [ -z "$PASSWORT" ]; then
+  zenity --error --title="Abgebrochen" --text="Kein Passwort eingegeben."
+  exit 1
+fi
+
+run_sudo_bash() {
+  echo "$PASSWORT" | sudo -S -p '' bash -c "$1"
+}
+
+get_snapshots() {
+  OUT=$(echo "$PASSWORT" | sudo -S -p '' timeshift --list 2>/dev/null || true)
+  result=""
+  while IFS= read -r line; do
+    id=$(printf "%s" "$line" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}[_-][0-9]{2}-[0-9]{2}-[0-9]{2}' || true)
+    if [ -n "$id" ]; then
+      comment=$(printf "%s" "$line" | sed "s/.*$id[[:space:]]*//" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      [ -z "$comment" ] && comment="(kein Kommentar)"
+      display=$(printf "%s" "$id" | sed -E 's/_/ /; s/([0-9]{2})-([0-9]{2})-([0-9]{2})$/\1:\2:\3/')
+      result+="$id|$display|$comment"$'\n'
+    fi
+  done <<< "$OUT"
+  printf "%s" "$result"
+}
+
+create_snapshot() {
+  SNAP_NAME=$(zenity --entry --title="Snapshot-Name" --text="Gib einen Namen für den Snapshot ein (optional):")
+  [ $? -ne 0 ] && return
+  [ -z "$SNAP_NAME" ] && SNAP_NAME="Manueller Snapshot"
+
+  zenity --info --title="Snapshot" --text="Snapshot wird erstellt — bitte warten..."
+  run_sudo_bash "timeshift --create --comments \"${SNAP_NAME}\" --yes" > /tmp/timeshift_create.log 2>&1
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    zenity --info --title="Fertig" --text="Snapshot '$SNAP_NAME' erfolgreich erstellt."
+    PLAY_SOUND complete
+    run_sudo_bash "update-grub" > /tmp/update_grub_create.log 2>&1
+    zenity --info --title="GRUB aktualisiert" --text="GRUB-Konfiguration wurde nach dem Snapshot aktualisiert."
+  else
+    zenity --text-info --title="Fehler bei Erstellung" --filename=/tmp/timeshift_create.log --width=800 --height=400
+    PLAY_SOUND dialog-error
+  fi
+}
+
+delete_snapshot() {
+  entries=$(get_snapshots)
+  [ -z "$entries" ] && zenity --info --title="Löschen" --text="Keine Snapshots vorhanden." && return
+
+  sorted_entries=$(printf "%s" "$entries" | sort -r)
+  counter=1
+  args=()
+  declare -A id_map
+
+  while IFS='|' read -r id display comment; do
+    display_id="GuideOS-Snapshot $counter"
+    args+=("$display_id" "$display${comment:+ — $comment}")
+    id_map["$display_id"]="$id"
+    ((counter++))
+  done <<< "$sorted_entries"
+
+  selected=$(zenity --list --title="Snapshot löschen" --text="Wähle Snapshot zum Löschen:" \
+            --column="Snapshot-ID" --column="Snapshots (Datum & Name)" \
+            "${args[@]}" --height=450 --width=800)
+  [ -z "$selected" ] && return
+
+  selected_id="${id_map[$selected]}"
+  zenity --question --title="Bestätigung" --text="Snapshot\n${selected}\nwirklich löschen?" --ok-label="Ja" --cancel-label="Nein"
+  [ $? -ne 0 ] && return
+
+  run_sudo_bash "timeshift --delete --snapshot \"$selected_id\" --yes" > /tmp/timeshift_delete.log 2>&1
+  rc=$?
+  if [ $rc -eq 0 ]; then
+    zenity --info --title="Gelöscht" --text="Snapshot '${selected}' wurde gelöscht."
+    PLAY_SOUND complete
+    run_sudo_bash "update-grub" > /tmp/update_grub_delete.log 2>&1
+    zenity --info --title="GRUB aktualisiert" --text="GRUB-Konfiguration wurde nach dem Löschen aktualisiert."
+  else
+    zenity --text-info --title="Fehler beim Löschen" --filename=/tmp/timeshift_delete.log --width=800 --height=400
+    PLAY_SOUND dialog-error
+  fi
+}
+
+main_menu() {
+  while true; do
+    choice=$(zenity --list --title="$TITLE" --text="Was möchtest du tun?" \
+      --column="Aktion" --height=300 --width=500 \
+      "Snapshot erstellen" "Snapshot löschen" "Beenden")
+
+    case "$choice" in
+      "Snapshot erstellen") create_snapshot ;;
+      "Snapshot löschen") delete_snapshot ;;
+      "Beenden") exit 0 ;;
+      *) break ;;
+    esac
+  done
+}
+
+main_menu
