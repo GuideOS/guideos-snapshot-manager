@@ -1,3 +1,13 @@
+guideos-snapshot-manager (1.2) unstable; urgency=medium
+
+  * Migrated from Snapper to Timeshift backend
+  * Added automatic GRUB update after snapshot creation
+  * Added automatic GRUB update after snapshot deletion
+  * Improved system checks and error handling
+  * Streamlined user interface
+
+ -- Actionschnitzel <actionschnitzel@guideos.de>  Thu, 05 Dec 2025 00:00:00 +0100
+
 guideos-snapshot-manager (1.1) unstable; urgency=medium
 
   * Fixed: Creat Desktop File
