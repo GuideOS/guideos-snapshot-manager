@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=GuideOS Snapshot-Manager
+Comment=Btrfs Snapshot Management Tool for GuideOS
+Name[de]=GuideOS Snapshot-Manager
+Comment[de]=Btrfs-Snapshot-Verwaltungstool für GuideOS
+Exec=guideos-snapshot-manager
+Icon=guideos-snapshot-manager
+Terminal=false
+Type=Application
+Categories=GuideOS;
+StartupNotify=true
