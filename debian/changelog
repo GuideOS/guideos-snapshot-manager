@@ -1,3 +1,11 @@
+guideos-snapshot-manager (1.2.2) unstable; urgency=medium
+
+  * Changed TimeShift setup dialog from question to info dialog
+  * Improved TimeShift setup instructions text
+  * Removed setup cancellation option for better user flow
+
+ -- Actionschnitzel <actionschnitzel@guideos.de>  Fri, 06 Dec 2025 00:00:00 +0100
+
 guideos-snapshot-manager (1.2.1) unstable; urgency=medium
 
   * Fixed: Removed duplicate code from main script
