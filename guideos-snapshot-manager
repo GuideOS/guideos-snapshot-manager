@@ -16,7 +16,7 @@
 # Autor: evilware666
 # Lizenz: MIT
 # -----------------------------------------------------------------------------
-# Version: 1.2
+# Version: 1.1
 # Letzte Änderung: 2025-10-26
 # -----------------------------------------------------------------------------
 
@@ -35,17 +35,13 @@ if [ -d "/cdrom" ] || grep -q "boot=live" /proc/cmdline; then
 fi
 # =================================================================
 
-zenity --question --title="GuideOS Snapshot-Manager - Einrichtungshinweis" \
---text="Bitte starte zunächst Timeshift und folge den Anweisungen.\n\n\
-- Btrfs aktivieren\n- Alle Snapshot-Intervalle anhaken\n- Home-Verzeichnis NICHT sichern\n\n\
-Danach ist der GuideOS Snapshot-Manager einsatzbereit." \
---ok-label="Ja, ich habe Timeshift eingerichtet" \
---cancel-label="Abbrechen" --width=700 --height=400
 
-if [ $? -ne 0 ]; then
-  zenity --info --title="Abgebrochen" --text="Bitte Timeshift zuerst einrichten."
-  exit 1
-fi
+zenity --info --title="GuideOS Snapshot-Manager - Einrichtungshinweis" \
+--text="Für eine optimale Systemsicherung wird empfohlen, TimeShift wie folgt einzurichten.\n\n\
+- Btrfs aktivieren\n- Alle Snapshot-Intervalle anhaken\n- Home-Verzeichnis NICHT sichern\n\n\
+Damit ist das System vollständig abgesichert, da TimeShift neben den manuell erstellten Snapshots auch automatisch welche anlegt." \
+--ok-label="OK" --width=700 --height=400
+
 
 export G_MESSAGES_DEBUG=none
 TITLE="GuideOS Snapshot-Manager"
@@ -55,7 +51,6 @@ PLAY_SOUND() {
     paplay "/usr/share/cinnamon/sounds/bell.ogg" 2>/dev/null &
   fi
 }
-
 
 PASSWORT=$(zenity --password --title="Authentifizierung erforderlich" --text="Bitte das Passwort des aktuellen Benutzers eingeben:")
 if [ -z "$PASSWORT" ]; then
