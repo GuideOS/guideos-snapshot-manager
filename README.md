@@ -1,47 +1,33 @@
 ```markdown
-# GuideOS Snapshot-Manager
+# GuideOS Stop-Tool
 
 ## Übersicht
-Der **GuideOS Snapshot-Manager** ist ein Zenity-basiertes Bash-Skript als GUI-Frontend für **Timeshift**.  
-Es ermöglicht die komfortable Verwaltung von Snapshots über eine grafische Oberfläche:
-
-- Snapshots erstellen  
-- Snapshots löschen  
-- Anzeige von Snapshots mit Datum und Kommentar  
-- Einfache Bedienung über Zenity  
+Das **GuideOS Stop-Tool** ist ein Zenity-basiertes Bash-Skript, das die komfortable Beendigung von Programmen durch einfaches Anklicken ermöglicht.  
+Es informiert den Benutzer über die Funktionsweise und startet anschließend `xkill`, um ein nicht mehr reagierendes Fenster oder Programm direkt zu schließen.
 
 - **Autor:** evilware666  
-- **Version:** 1.2  
-- **Letzte Änderung:** 26.10.2025  
+- **Version:** 1.1  
+- **Letzte Änderung:** 19.12.2025  
 - **Lizenz:** MIT  
 
 ---
 
 ## Voraussetzungen
-- **Linux-System mit Btrfs-Dateisystem**  
-- **Timeshift** installiert und einmalig eingerichtet  
+- **Linux-System** mit Bash  
 - **Zenity** für grafische Dialoge  
-- **Sudo-Rechte** für Snapshot-Operationen  
-- Optional: `paplay` für akustische Benachrichtigungen  
-
----
-
-## Einrichtungshinweis
-Vor der Nutzung Timeshift einmalig konfigurieren:
-1. Alle Snapshot-Intervalle aktivieren  
-2. Home-Verzeichnis **nicht** sichern (vermeidet große Snapshots)  
+- **x11-utils** (für `xkill`) installiert  
 
 ---
 
 ## Installation
-1. Skript speichern, z. B. unter `/usr/local/bin/snapshot-manager.sh`.  
+1. Skript speichern, z. B. unter `/usr/local/bin/stop-tool.sh`.  
 2. Datei ausführbar machen:
    ```bash
-   chmod +x /usr/local/bin/snapshot-manager.sh
+   chmod +x /usr/local/bin/stop-tool.sh
    ```
-3. Sicherstellen, dass `timeshift` und `zenity` installiert sind:
+3. Sicherstellen, dass `zenity` und `xkill` verfügbar sind:
    ```bash
-   sudo apt install timeshift zenity
+   sudo apt install zenity x11-utils
    ```
 
 ---
@@ -49,23 +35,20 @@ Vor der Nutzung Timeshift einmalig konfigurieren:
 ## Nutzung
 Starte das Skript im Terminal:
 ```bash
-./snapshot-manager.sh
+./stop-tool.sh
 ```
 
 ### Ablauf:
-- **Systemprüfung:** Nur auf Btrfs-Systemen, nicht im Live-Modus.  
-- **Passwortabfrage:** Authentifizierung über Zenity.  
-- **Menü:** Auswahl zwischen Snapshot erstellen, Snapshot löschen oder Beenden.  
-- **Snapshot-Erstellung:** Eingabe eines Namens, Erstellung mit Timeshift, GRUB-Aktualisierung.  
-- **Snapshot-Löschung:** Auswahl aus Liste, Bestätigung, Löschung mit Timeshift, GRUB-Aktualisierung.  
+1. **Infobox:** Hinweis zur Nutzung des Tools.  
+2. **xkill:** Nach Bestätigung startet `xkill`.  
+3. **Aktion:** Mit der Maus auf das zu beendende Fenster klicken.  
 
 ---
 
 ## Hinweise
-- Snapshots werden über **Timeshift** verwaltet.  
-- Nach jeder Erstellung oder Löschung wird die **GRUB-Konfiguration** automatisch aktualisiert.  
-- Akustische Signale werden abgespielt, wenn `paplay` verfügbar ist.  
-- Das Tool ist ausschließlich für **Btrfs-Systeme** geeignet.  
+- Das Tool ist besonders nützlich bei nicht mehr reagierenden Programmen.  
+- `xkill` beendet das ausgewählte Fenster sofort.  
+- Vorsicht: Auch wichtige Programme können versehentlich beendet werden.  
 
 ---
 
