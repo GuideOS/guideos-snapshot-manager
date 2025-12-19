@@ -12,7 +12,7 @@ Es ermöglicht die komfortable Verwaltung von Snapshots über eine grafische Obe
 
 - **Autor:** evilware666  
 - **Version:** 1.2  
-- **Letzte Änderung:** 19.12.2025  
+- **Letzte Änderung:** 26.10.2025  
 - **Lizenz:** MIT  
 
 ---
